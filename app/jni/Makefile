@@ -152,7 +152,7 @@ $(LIBDIR)/cpu-features.o:
 pixman: init cpufeatures $(LIBDIR)/libpixman-1.a
 
 $(LIBDIR)/libpixman-1.a: pixman/Makefile
-	cd pixman; make -j$(NPROC); make install
+	cd pixman && $(MAKE) -j$(NPROC) && $(MAKE) install
 
 pixman/Makefile: pixman/configure
 	cd pixman; $(CONFIGURE_ENV) \
@@ -167,7 +167,7 @@ pixman/configure: pixman/configure.ac
 iconv: init $(LIBDIR)/libiconv.a
 
 $(LIBDIR)/libiconv.a: libiconv/Makefile
-	cd libiconv; make -j$(NPROC); make install
+	cd libiconv && $(MAKE) -j$(NPROC) && $(MAKE) install
 
 libiconv/Makefile: libiconv/configure
 	cd libiconv; $(CONFIGURE) --enable-static=true --enable-shared=false
@@ -176,7 +176,7 @@ libiconv/Makefile: libiconv/configure
 openal: init $(LIBDIR)/libopenal.so
 
 $(LIBDIR)/libopenal.so: openal/cmakebuild/Makefile
-	cd openal/cmakebuild; make -j$(NPROC); make install
+	cd openal/cmakebuild && $(MAKE) -j$(NPROC) && $(MAKE) install
 
 openal/cmakebuild/Makefile: openal/CMakeLists.txt
 	cd openal; mkdir cmakebuild; cd cmakebuild; \
@@ -186,7 +186,7 @@ openal/cmakebuild/Makefile: openal/CMakeLists.txt
 openssl: init $(LIBDIR)/libssl.a
 
 $(LIBDIR)/libssl.a: openssl/Makefile
-	cd openssl; make -j$(NPROC); make install_sw
+	cd openssl && $(MAKE) -j$(NPROC) && $(MAKE) install_sw
 
 openssl/Makefile: openssl/Configure
 	cd openssl; CFLAGS="-Wno-macro-redefined" ./Configure $(OPENSSL_TARGET) \
@@ -197,7 +197,7 @@ openssl/Makefile: openssl/Configure
 ruby: init openssl $(LIBDIR)/libruby.so.3.1.0
 
 $(LIBDIR)/libruby.so.3.1.0: ruby/Makefile
-	cd ruby; make -j$(NPROC); make install
+	cd ruby && $(MAKE) -j$(NPROC) && $(MAKE) install
 
 ruby/Makefile: ruby/configure
 	cd ruby; DLDFLAGS="-Wl,-soname,libruby.so" \

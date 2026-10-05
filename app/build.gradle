@@ -2,6 +2,11 @@ plugins {
     id 'com.android.application'
 }
 
+def targetAbis = (project.findProperty('targetAbis') ?: 'arm64-v8a').toString().split(',').toList()
+if (targetAbis.any { !(it in ['arm64-v8a', 'armeabi-v7a']) }) {
+    throw new GradleException('targetAbis must contain arm64-v8a and/or armeabi-v7a')
+}
+
 android {
     namespace 'com.hatkid.mkxpz'
     compileSdk 33
@@ -14,6 +19,11 @@ android {
         versionName "0.1.3"
         archivesBaseName = "mkxp-z-$versionName"
         ndk.debugSymbolLevel = 'FULL'
+        externalNativeBuild {
+            ndkBuild {
+                abiFilters.addAll(targetAbis)
+            }
+        }
     }
 
     buildTypes {
@@ -32,9 +42,8 @@ android {
         abi {
             enable true
             reset()
-            // You can build also 'x86' and 'x86_64' if you want (useful for AVD debugging)
-            include 'arm64-v8a', 'armeabi-v7a'
-            universalApk true
+            include(*targetAbis)
+            universalApk(targetAbis.size() > 1)
         }
     }
 

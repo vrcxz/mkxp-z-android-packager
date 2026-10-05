@@ -23,3 +23,14 @@ This is a fork from [mkxp-z-android-reworked](https://github.com/BookerRues9/mkx
 ```
 app/build/outputs/apk/debug/mkxp-z-<version>-<abi>-debug.apk
 ```
+
+---
+
+### Note
+
+This build targets `arm64-v8a` by default. To also support 32-bit ARM devices and
+produce a universal APK, use:
+
+```bash
+./tools/build.sh /path/to/your/game.zip --all-abis
+```
