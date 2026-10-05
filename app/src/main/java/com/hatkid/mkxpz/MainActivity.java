@@ -20,6 +20,11 @@ import android.provider.Settings;
 import android.util.Log;
 import java.util.Locale;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import android.content.res.AssetManager;
+import android.widget.Toast;
 
 import org.libsdl.app.SDLActivity;
 import com.hatkid.mkxpz.gamepad.Gamepad;
@@ -36,6 +41,11 @@ public class MainActivity extends SDLActivity
     private static String OBB_MAIN_FILENAME;
     private static boolean DEBUG = false;
 
+    // Bundled game (APK assets) extraction
+    private static final String ASSETS_GAME_DIR = "game";
+    private static final String EXTRACTED_DIR = "game";
+    private static final String EXTRACT_MARKER = ".extract_ok";
+
     protected boolean mStarted = false;
 
     private StorageManager mStorageManager;
@@ -43,6 +53,120 @@ public class MainActivity extends SDLActivity
     // In-screen gamepad
     private final Gamepad mGamepad = new Gamepad();
     private boolean mGamepadInvisible = false;
+
+    /** True when the APK ships a game under assets/game. */
+    private boolean hasBundledAssets()
+    {
+        try {
+            String[] entries = getAssets().list(ASSETS_GAME_DIR);
+            return entries != null && entries.length > 0;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** True when the extracted copy matches the current APK version. */
+    private boolean markerIsCurrent()
+    {
+        try {
+            File marker = new File(getFilesDir(), EXTRACTED_DIR + "/" + EXTRACT_MARKER);
+            if (!marker.exists()) {
+                return false;
+            }
+            String stored = new String(java.nio.file.Files.readAllBytes(marker.toPath())).trim();
+            return stored.equals(String.valueOf(BuildConfig.VERSION_CODE));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Blocking extraction of the bundled game into the app's private files dir. */
+    private boolean extractBundledGame()
+    {
+        AssetManager am = getAssets();
+        File dest = new File(getFilesDir(), EXTRACTED_DIR);
+        try {
+            String[] entries = am.list(ASSETS_GAME_DIR);
+            if (entries == null || entries.length == 0) {
+                return false;
+            }
+        } catch (IOException e) {
+            return false;
+        }
+        Log.i(TAG, "Extracting bundled game from APK assets to " + dest);
+        if (dest.exists()) {
+            deleteRecursive(dest);
+        }
+        //noinspection ResultOfMethodCallIgnored
+        dest.mkdirs();
+        try {
+            extractAssetDir(am, ASSETS_GAME_DIR, dest);
+            FileOutputStream fos = new FileOutputStream(new File(dest, EXTRACT_MARKER));
+            try {
+                fos.write(String.valueOf(BuildConfig.VERSION_CODE).getBytes());
+            } finally {
+                fos.close();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to extract bundled game", e);
+            return false;
+        }
+        return true;
+    }
+
+    private void extractAssetDir(AssetManager am, String assetPath, File outDir) throws IOException
+    {
+        String[] entries = am.list(assetPath);
+        if (entries == null || entries.length == 0) {
+            // It is a file
+            copyAssetFile(am, assetPath, outDir);
+            return;
+        }
+        //noinspection ResultOfMethodCallIgnored
+        outDir.mkdirs();
+        for (String entry : entries) {
+            String childAsset = assetPath + "/" + entry;
+            File childOut = new File(outDir, entry);
+            String[] subEntries = am.list(childAsset);
+            if (subEntries != null && subEntries.length > 0) {
+                extractAssetDir(am, childAsset, childOut);
+            } else {
+                copyAssetFile(am, childAsset, childOut);
+            }
+        }
+    }
+
+    private void copyAssetFile(AssetManager am, String assetPath, File outFile) throws IOException
+    {
+        File parent = outFile.getParentFile();
+        if (parent != null) {
+            //noinspection ResultOfMethodCallIgnored
+            parent.mkdirs();
+        }
+        InputStream in = am.open(assetPath);
+        FileOutputStream out = new FileOutputStream(outFile);
+        byte[] buffer = new byte[1024 * 512];
+        int n;
+        while ((n = in.read(buffer)) != -1) {
+            out.write(buffer, 0, n);
+        }
+        out.close();
+        in.close();
+    }
+
+    private void deleteRecursive(File f)
+    {
+        if (f.isDirectory()) {
+            File[] children = f.listFiles();
+            if (children != null) {
+                for (File c : children) {
+                    deleteRecursive(c);
+                }
+            }
+        }
+        //noinspection ResultOfMethodCallIgnored
+        f.delete();
+    }
 
     private void runSDLThread()
     {
@@ -90,17 +214,6 @@ public class MainActivity extends SDLActivity
     };
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data)
-    {
-        if (requestCode == 110) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
-                // Close the App because the User did not allow the all files access permission to be used.
-                mSingleton.finish();
-            }
-        }
-    }
-
-    @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
@@ -119,17 +232,6 @@ public class MainActivity extends SDLActivity
         } catch (PackageManager.NameNotFoundException e) {
             Log.w(TAG, "Failed to set debug flag: " + e);
             e.printStackTrace();
-        }
-
-        // Check for all files access permission (Android 11+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!Environment.isExternalStorageManager()) {
-                // Request all files access permission
-                // TODO: AlertDialog: polite notice that mkxp-z requires All Files Access permission.
-                Uri uri = Uri.parse("package:" + getPackageName());
-                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, uri);
-                startActivityForResult(intent, 110);
-            }
         }
 
         // Setup in-screen gamepad
@@ -157,10 +259,29 @@ public class MainActivity extends SDLActivity
                 // Try to mount main OBB file
                 mStorageManager.mountObb(OBB_MAIN_FILENAME, null, obbListener);
             } else {
-                Log.v(TAG, "Main OBB file not found, starting without main OBB mount");
+                Log.v(TAG, "Main OBB file not found");
 
-                // Run from default game directory
-                runSDLThread();
+                // Prefer the game bundled in the APK; fall back to external storage
+                File dest = new File(getFilesDir(), EXTRACTED_DIR);
+                if (new File(dest, EXTRACT_MARKER).exists() && markerIsCurrent()) {
+                    GAME_PATH = dest.getAbsolutePath();
+                    Log.i(TAG, "Using bundled game at " + GAME_PATH);
+                    runSDLThread();
+                } else if (hasBundledAssets()) {
+                    GAME_PATH = dest.getAbsolutePath();
+                    Log.i(TAG, "Extracting bundled game to " + GAME_PATH);
+                    Toast.makeText(this, "Preparing game files, please wait...", Toast.LENGTH_LONG).show();
+                    final Activity activity = this;
+                    new Thread(() -> {
+                        if (!extractBundledGame()) {
+                            Log.e(TAG, "Bundled game extraction failed");
+                        }
+                        activity.runOnUiThread(() -> runSDLThread());
+                    }).start();
+                } else {
+                    Log.v(TAG, "No bundled game assets, starting from " + GAME_PATH);
+                    runSDLThread();
+                }
             }
         } else {
             // onStart: Resume SDL thread

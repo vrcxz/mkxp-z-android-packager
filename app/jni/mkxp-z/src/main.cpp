@@ -267,14 +267,8 @@ int main(int argc, char *argv[])
 	jstring strJGamePath = (jstring)env->GetStaticObjectField(cls, fIDGamePath);
 	const char *dataDir = env->GetStringUTFChars(strJGamePath, 0);
 
-	// Request storage permission (before Android 11)
-	if (sdkVersion < 30) {
-		if (!SDL_AndroidRequestPermission("android.permission.WRITE_EXTERNAL_STORAGE")) {
-			showInitError("Failed to get external storage. Please check the app permissions.");
-			SDL_Quit();
-			return 0;
-		}
-	}
+	// Storage permission is no longer requested: the game runs from the app's
+	// private files directory (bundled assets extracted at first launch).
 
 	// Set and ensure current directory
 	if (!mkxp_fs::directoryExists(dataDir)) {
