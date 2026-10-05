@@ -49,6 +49,14 @@ android {
         }
     }
     ndkVersion '23.2.8568313'
+
+    // Audio-stripped variant: built with `./gradlew assembleDebug -PstripAudio`.
+    // Excludes the game's bundled Audio tree from the APK.
+    aaptOptions {
+        if (project.hasProperty('stripAudio')) {
+            ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!Audio"
+        }
+    }
 }
 
 dependencies {
