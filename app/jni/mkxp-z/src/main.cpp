@@ -358,6 +358,21 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
+	// SDL window size: fullscreen should actually fill the display on Android
+	// (SDL does not resize the activity window; it only toggles immersive mode).
+	// Fetch the display mode first so the SDL window is created at the real
+	// screen resolution; otherwise sunken corner rendering artifacts appear.
+	SDL_DisplayMode mode;
+	SDL_GetDisplayMode(0, 0, &mode);
+	int winW0 = conf.defScreenW;
+	int winH0 = conf.defScreenH;
+#ifdef MKXPZ_BUILD_ANDROID
+	if (conf.fullscreen && mode.w > 0 && mode.h > 0) {
+		winW0 = mode.w;
+		winH0 = mode.h;
+	}
+#endif
+
 	// Win32: Initialize Winsock2
 #if defined(__WIN32__)
 	WSAData wsadata = {0};
@@ -394,7 +409,7 @@ int main(int argc, char *argv[])
 	win = SDL_CreateWindow(
 		conf.windowTitle.c_str(),
 		SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-		conf.defScreenW, conf.defScreenH,
+		winW0, winH0,
 		winFlags
 	);
 
@@ -446,9 +461,6 @@ int main(int argc, char *argv[])
 #endif
 		return 0;
 	}
-
-	SDL_DisplayMode mode;
-	SDL_GetDisplayMode(0, 0, &mode);
 
 	// Can't sync to display refresh rate if its value is unknown
 	if (!mode.refresh_rate)
