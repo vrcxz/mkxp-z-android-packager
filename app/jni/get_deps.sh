@@ -3,6 +3,8 @@
 # This script downloads/git clones project dependencies
 # such as libogg, SDL2, Ruby, etc.
 
+set -euo pipefail
+
 GIT_ARGS="-q -c advice.detachedHead=false --single-branch --depth 1"
 
 # Xiph libogg

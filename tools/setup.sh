@@ -43,7 +43,20 @@ export ANDROID_SDK_ROOT="$SDK_DIR"
 export ANDROID_NDK_HOME="$SDK_DIR/ndk/$NDK_VERSION"
 
 log "Installing Android SDK packages (platform 33, build-tools, NDK, CMake)..."
+# sdkmanager closes stdin when done, so yes can exit with SIGPIPE (141).
+# Check sdkmanager's status separately while keeping real failures fatal.
+set +e
 yes | "$SDKMANAGER" --licenses >/dev/null
+license_status=("${PIPESTATUS[@]}")
+set -e
+if (( license_status[1] != 0 )); then
+  echo "Android SDK license acceptance failed (exit ${license_status[1]})." >&2
+  exit "${license_status[1]}"
+fi
+if (( license_status[0] != 0 && license_status[0] != 141 )); then
+  echo "Failed to supply Android SDK license responses." >&2
+  exit "${license_status[0]}"
+fi
 "$SDKMANAGER" \
   "platform-tools" \
   "platforms;android-33" \
@@ -54,7 +67,7 @@ yes | "$SDKMANAGER" --licenses >/dev/null
 # ---------------- native deps sources ----------------
 log "Fetching native dependency sources (SDL2, Ruby, openal, ...)..."
 cd "$REPO_ROOT/app/jni"
-[[ -d SDL2 && -d ruby && -d openal ]] || ./get_deps.sh
+./get_deps.sh
 
 log "Embedding engine assets/shaders..."
 cd "$REPO_ROOT/app/jni/mkxp-z"

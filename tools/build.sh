@@ -27,6 +27,17 @@ done
 [[ -f "$REPO_ROOT/tools/env.sh" ]] || { echo "Run ./tools/setup.sh first" >&2; exit 1; }
 source "$REPO_ROOT/tools/env.sh"
 
+if [[ ! -x "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$ARCH/bin/aarch64-linux-android23-clang" ]]; then
+  echo "Android NDK is missing or incomplete. Run ./tools/setup.sh and wait for 'Setup complete'." >&2
+  exit 1
+fi
+for dep in libogg libvorbis libtheora libiconv uchardet pixman physfs openal SDL2 SDL2_image SDL2_ttf SDL2_sound openssl ruby; do
+  if [[ ! -d "$REPO_ROOT/app/jni/$dep" ]]; then
+    echo "Native dependency '$dep' is missing. Run ./tools/setup.sh and wait for 'Setup complete'." >&2
+    exit 1
+  fi
+done
+
 # Native dependency prebuilts (needed once per checkout):
 if [[ ! -f "$REPO_ROOT/app/jni/build-arm64-v8a/lib/libopenal.so" ]]; then
   echo "==> Building native dependencies for arm64-v8a (first run only)..."
