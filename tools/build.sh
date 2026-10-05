@@ -38,26 +38,53 @@ for dep in libogg libvorbis libtheora libiconv uchardet pixman physfs openal SDL
   fi
 done
 
-# Native dependency prebuilts (needed once per checkout):
-if [[ ! -f "$REPO_ROOT/app/jni/build-arm64-v8a/lib/libopenal.so" ]]; then
-  echo "==> Building native dependencies for arm64-v8a (first run only)..."
-  (cd "$REPO_ROOT/app/jni" && HOST=aarch64-linux-android TARGET=aarch64-linux-android ABI=arm64-v8a make -j"$(nproc)")
-fi
-if [[ ! -f "$REPO_ROOT/app/jni/build-armeabi-v7a/lib/libopenal.so" ]]; then
-  echo "==> Building native dependencies for armeabi-v7a (first run only)..."
-  (cd "$REPO_ROOT/app/jni" && HOST=armv7a-linux-androideabi TARGET=arm-linux-androideabi ABI=armeabi-v7a make -j"$(nproc)")
-fi
+# Check every library produced by the dependency Makefile before reusing a build.
+build_native() {
+  local abi="$1" host="$2" target="$3" library complete=1
+  local libdir="$REPO_ROOT/app/jni/build-$abi/lib"
+  for library in libcpufeatures.a libpixman-1.a libiconv.a libopenal.so libssl.a libcrypto.a libruby.so.3.1.0; do
+    [[ -f "$libdir/$library" ]] || complete=0
+  done
+  if (( complete )); then
+    echo "==> Reusing native dependencies for $abi"
+    return
+  fi
+  echo "==> Building native dependencies for $abi. The first build can take a long time."
+  (
+    cd "$REPO_ROOT/app/jni"
+    # Keep a visible elapsed-time update even while a compiler is quiet.
+    start=$SECONDS
+    (
+      sleep_pid=""
+      trap '[[ -z "$sleep_pid" ]] || kill "$sleep_pid" 2>/dev/null; exit 0' TERM INT
+      while true; do
+        sleep 30 &
+        sleep_pid=$!
+        wait "$sleep_pid"
+        echo "==> Native build for $abi still running ($((SECONDS - start)) seconds elapsed)..."
+      done
+    ) &
+    progress_pid=$!
+    trap 'kill "$progress_pid" 2>/dev/null || true; wait "$progress_pid" 2>/dev/null || true' EXIT
+    HOST="$host" TARGET="$target" ABI="$abi" make -j"$(nproc)"
+  )
+}
+echo "==> [1/5] Preparing native dependencies for arm64-v8a..."
+build_native arm64-v8a aarch64-linux-android aarch64-linux-android
+echo "==> [2/5] Preparing native dependencies for armeabi-v7a..."
+build_native armeabi-v7a armv7a-linux-androideabi arm-linux-androideabi
 
 NAME="$(basename "${SRC%.*}" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9._-')"
 
-echo "==> Packaging game files..."
+echo "==> [3/5] Packaging game files..."
 "$REPO_ROOT/tools/package_game.sh" --src "$SRC" --name "$NAME"
 
-echo "==> Installing bundled assets..."
+echo "==> [4/5] Installing bundled assets..."
+mkdir -p "$REPO_ROOT/app/src/main/assets"
 rm -rf "$REPO_ROOT/app/src/main/assets/game"
 cp -r "$REPO_ROOT/build/$NAME/mkxp-z" "$REPO_ROOT/app/src/main/assets/game"
 
-echo "==> Building APK..."
+echo "==> [5/5] Building APK..."
 if [[ $STRIP_AUDIO -eq 1 ]]; then
   (cd "$REPO_ROOT" && ./gradlew assembleDebug -PstripAudio --console=plain)
 else
