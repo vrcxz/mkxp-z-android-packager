@@ -10,8 +10,8 @@ android {
         applicationId "com.hatkid.mkxpz"
         minSdk 23
         targetSdk 33
-        versionCode 11
-        versionName "0.1.1"
+        versionCode 13
+        versionName "0.1.3"
         archivesBaseName = "mkxp-z-$versionName"
         ndk.debugSymbolLevel = 'FULL'
     }
