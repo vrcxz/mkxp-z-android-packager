@@ -1,4 +1,4 @@
-# mkxp-z Game Packager
+# mkxp-z Android Packager
 
 This is a fork from [mkxp-z-android-reworked](https://github.com/BookerRues9/mkxp-z-android-reworked), for packaging game files into an apk.
 
